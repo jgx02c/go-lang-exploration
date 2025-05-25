@@ -86,6 +86,19 @@
 * [ ] Skim overview of LLM use in procurement (RAG, document processing)
 * [ ] Light intro to Data Warehouse systems: Redshift, BigQuery, or Snowflake
 
----
 
-Let me know if you want this exported as a `.md` file or added to Notion.
+
+
+
+## Access the docker w/ postgres
+
+docker exec -it echo_postgres psql -U postgres -d echo_api
+
+## Exit postgres Shell
+
+\q
+
+
+## Run the docker
+
+docker-compose up -d
