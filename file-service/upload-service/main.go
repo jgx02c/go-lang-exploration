@@ -2,16 +2,19 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -23,6 +26,7 @@ import (
 type server struct {
 	pb.UnimplementedFileUploadServer
 	uploadDir string
+	db        *sql.DB
 }
 
 func (s *server) UploadFile(stream pb.FileUpload_UploadFileServer) error {
@@ -77,13 +81,23 @@ func (s *server) UploadFile(stream pb.FileUpload_UploadFileServer) error {
 		totalSize += int64(len(chunk))
 	}
 
+	// Save file metadata to database
+	_, err = s.db.Exec(`
+		INSERT INTO files (id, filename, content_type, size, user_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, fileID, metadata.Filename, metadata.ContentType, totalSize, userID, time.Now())
+	if err != nil {
+		log.Printf("Failed to save file metadata to database: %v", err)
+		return status.Error(codes.Internal, "failed to save file metadata")
+	}
+
 	// Send response
 	return stream.SendAndClose(&pb.UploadFileResponse{
 		FileId:    fileID,
 		Filename:  metadata.Filename,
 		Size:      totalSize,
-		CreatedAt: fmt.Sprintf("%d", totalSize), // TODO: Add proper timestamp
-		UserId:    userID, // Add user ID to the response
+		CreatedAt: time.Now().Format(time.RFC3339),
+		UserId:    userID,
 	})
 }
 
@@ -149,6 +163,23 @@ func main() {
 		log.Fatalf("Failed to create upload directory: %v", err)
 	}
 
+	// Initialize database connection
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL environment variable is not set")
+	}
+
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// Test database connection
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to ping database: %v", err)
+	}
+
 	// Start gRPC server
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -156,7 +187,10 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterFileUploadServer(s, &server{uploadDir: uploadDir})
+	pb.RegisterFileUploadServer(s, &server{
+		uploadDir: uploadDir,
+		db:        db,
+	})
 
 	log.Printf("Upload service listening on :50051")
 	if err := s.Serve(lis); err != nil {

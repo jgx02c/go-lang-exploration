@@ -13,7 +13,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
-	"github.com/lib/pq"
+	_ "github.com/lib/pq" // Blank import for PostgreSQL driver
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -97,10 +97,25 @@ func (s *server) ListFiles(ctx context.Context, req *pb.ListFilesRequest) (*pb.L
 		return nil, err
 	}
 
+	log.Printf("Listing files for user ID: %s", userID)
+
 	// Query files from database
-	rows, err := s.db.Query("SELECT id, filename, content_type, size, created_at FROM files WHERE user_id = $1", userID)
+	query := `
+		SELECT 
+			id::text, 
+			filename, 
+			content_type, 
+			size, 
+			created_at 
+		FROM files 
+		WHERE user_id = $1::integer
+	`
+	log.Printf("Executing query: %s with user_id=%s", query, userID)
+	
+	rows, err := s.db.Query(query, userID)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to query files")
+		log.Printf("Database query error: %v", err)
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to query files: %v", err))
 	}
 	defer rows.Close()
 
@@ -110,7 +125,8 @@ func (s *server) ListFiles(ctx context.Context, req *pb.ListFilesRequest) (*pb.L
 		var createdAt time.Time
 		err := rows.Scan(&file.FileId, &file.Filename, &file.ContentType, &file.Size, &createdAt)
 		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to scan file row")
+			log.Printf("Row scan error: %v", err)
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to scan file row: %v", err))
 		}
 		file.UserId = userID
 		file.CreatedAt = createdAt.Format(time.RFC3339)
@@ -118,9 +134,11 @@ func (s *server) ListFiles(ctx context.Context, req *pb.ListFilesRequest) (*pb.L
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, status.Error(codes.Internal, "error iterating file rows")
+		log.Printf("Row iteration error: %v", err)
+		return nil, status.Error(codes.Internal, fmt.Sprintf("error iterating file rows: %v", err))
 	}
 
+	log.Printf("Found %d files for user %s", len(files), userID)
 	return &pb.ListFilesResponse{
 		Files: files,
 	}, nil
