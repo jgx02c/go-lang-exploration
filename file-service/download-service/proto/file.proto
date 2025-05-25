@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package filedownload;
+
+option go_package = "file-service/download-service/proto";
+
+// FileDownload service definition
+service FileDownload {
+  // DownloadFile streams a file in chunks
+  rpc DownloadFile(DownloadFileRequest) returns (stream DownloadFileResponse) {}
+  
+  // ListFiles returns metadata for all files owned by a user
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse) {}
+}
+
+// DownloadFileRequest contains the file ID to download
+message DownloadFileRequest {
+  string file_id = 1;
+  string user_id = 2;  // For authorization
+}
+
+// DownloadFileResponse contains a chunk of file data
+message DownloadFileResponse {
+  oneof data {
+    FileMetadata metadata = 1;  // First message contains metadata
+    bytes chunk = 2;            // Subsequent messages contain file chunks
+  }
+}
+
+// ListFilesRequest is used to list files for a user
+message ListFilesRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+// ListFilesResponse contains a list of file metadata
+message ListFilesResponse {
+  repeated FileMetadata files = 1;
+  string next_page_token = 2;
+}
+
+// FileMetadata contains information about the file
+message FileMetadata {
+  string file_id = 1;
+  string filename = 2;
+  string content_type = 3;
+  int64 size = 4;
+  string created_at = 5;
+  string user_id = 6;
+} 

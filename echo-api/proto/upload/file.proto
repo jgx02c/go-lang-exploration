@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package fileupload;
+
+option go_package = "echo-api/proto/upload";
+
+// FileUpload service definition
+service FileUpload {
+  // UploadFile uploads a file and returns metadata
+  rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse) {}
+  
+  // GetFileMetadata returns metadata for a specific file
+  rpc GetFileMetadata(GetFileMetadataRequest) returns (FileMetadata) {}
+}
+
+// UploadFileRequest represents a chunk of file data
+message UploadFileRequest {
+  oneof data {
+    FileMetadata metadata = 1;  // First message contains metadata
+    bytes chunk = 2;            // Subsequent messages contain file chunks
+  }
+}
+
+// UploadFileResponse is returned after successful upload
+message UploadFileResponse {
+  string file_id = 1;
+  string filename = 2;
+  int64 size = 3;
+  string created_at = 4;
+  string user_id = 5;  // ID of the user who uploaded the file
+}
+
+// GetFileMetadataRequest is used to fetch file metadata
+message GetFileMetadataRequest {
+  string file_id = 1;
+}
+
+// FileMetadata contains information about the file
+message FileMetadata {
+  string filename = 1;
+  string content_type = 2;
+  int64 size = 3;
+  string user_id = 4;  // ID of the user who owns the file
+} 

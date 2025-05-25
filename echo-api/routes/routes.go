@@ -17,4 +17,11 @@ func Setup(e *echo.Echo) {
 	r := e.Group("/profile")
 	r.Use(echojwt.JWT([]byte(os.Getenv("JWT_SECRET"))))
 	r.GET("", handlers.Profile)
+
+	// File handling routes
+	files := e.Group("/files")
+	files.Use(echojwt.JWT([]byte(os.Getenv("JWT_SECRET"))))
+	files.POST("/upload", handlers.UploadFile)
+	files.GET("/download/:id", handlers.DownloadFile)
+	files.GET("/list", handlers.ListFiles)
 }
